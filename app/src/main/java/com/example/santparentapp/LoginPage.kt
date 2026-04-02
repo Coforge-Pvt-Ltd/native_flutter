@@ -1,5 +1,6 @@
 package com.example.santparentapp
 
+import android.content.Context
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,17 +27,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
 @Composable
 fun LoginPage(modifier: Modifier = Modifier) {
-
-
+    val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
@@ -69,9 +73,9 @@ fun LoginPage(modifier: Modifier = Modifier) {
                 onClick = {
                     scope.launch {
                         isLoading = true
-                        delay(5000L)
+                        delay(2000L) // Shorter delay for better UX
                         isLoading = false
-                        generateUUidAndShow(sHostState)
+                        launchFlutterWithToken(context, sHostState)
                     }
 
                 },
@@ -108,13 +112,38 @@ fun LoginPage(modifier: Modifier = Modifier) {
     }
 }
 
-suspend fun generateUUidAndShow(sHostState: SnackbarHostState) {
+fun launchFlutterWithToken(context: Context, sHostState: SnackbarHostState) {
     val randomUUID = java.util.UUID.randomUUID().toString()
-    sHostState.showSnackbar("Generated ID: $randomUUID")
-//    FlutterActivity
-//        .withCachedEngine("bank_engine")
-//        .initialRoute("/home")
-//        .build(this)
+    
+    // 1. Get the pre-warmed engine from cache
+    val engine = FlutterEngineCache.getInstance().get("my_engine_id")
+    
+    if (engine != null) {
+        // 2. Set up the MethodChannel to send the token and initial route
+        MethodChannel(engine.dartExecutor.binaryMessenger, "com.example.bank_query/token")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getToken" -> result.success(randomUUID)
+                    "getInitialRoute" -> result.success("/chat")
+                    else -> result.notImplemented()
+                }
+            }
+            
+        // 3. Launch the activity
+        context.startActivity(
+            FlutterActivity
+                .withCachedEngine("my_engine_id")
+                .build(context)
+        )
+    } else {
+        // Fallback: Launch without cache if for some reason it's missing
+        context.startActivity(
+            FlutterActivity
+                .withNewEngine()
+                .initialRoute("/chat")
+                .build(context)
+        )
+    }
 }
 
 @Preview(showBackground = true, showSystemUi = true)

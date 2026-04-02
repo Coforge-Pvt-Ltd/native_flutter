@@ -25,6 +25,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/gif/
+    - assets/icons/
+
   module:
     androidX: true
     androidPackage: com.example.bank_query_flutter_module
