@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../data/model/chat_message.dart';
 import '../../domain/usecases/ask_ai_question_usecase.dart';
@@ -8,6 +9,7 @@ class AiAssistantBloc
     extends Bloc<AiAssistantEvent, AiAssistantState> {
 
   final AskAiQuestionUseCase askAi;
+  static const _platform = MethodChannel('com.example.bank_query/token');
 
   AiAssistantBloc(this.askAi)
       : super(
@@ -22,11 +24,18 @@ class AiAssistantBloc
     on<AiStoppedSpeaking>(_onAiStoppedSpeaking);
   }
 
+  /// Helper to send logs to Native System Logs page
+  void _logToNative(String message) {
+    _platform.invokeMethod('sendAppLog', {"message": message});
+  }
+
   Future<void> _onAskAi(
       AskAi event,
       Emitter<AiAssistantState> emit,
       ) async {
     final current = state as AiChatState;
+
+    _logToNative("User: ${event.question}");
 
     // 1. Add User message and set thinking state
     emit(
@@ -42,6 +51,8 @@ class AiAssistantBloc
     try {
       // 2. Call AI UseCase
       final result = await askAi(event.question);
+      
+      _logToNative("FinAI: ${result.text}");
 
       // 3. Add AI response and stop thinking
       final updatedCurrent = state as AiChatState;
@@ -55,7 +66,8 @@ class AiAssistantBloc
         ),
       );
     } catch (e) {
-      // Handle error by stopping thinking and optionally adding an error message
+      _logToNative("System Error: $e");
+      
       final updatedCurrent = state as AiChatState;
       emit(
         updatedCurrent.copyWith(

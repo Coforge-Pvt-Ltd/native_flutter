@@ -1,6 +1,7 @@
 import 'package:bank_query_flutter_module/core/utils/image_constant.dart';
 import 'package:bank_query_flutter_module/feature/chat/presentation/pages/talk_with_ai_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../bloc/ai_assistant_bloc.dart';
@@ -8,11 +9,40 @@ import '../bloc/ai_assistant_event.dart';
 import '../bloc/ai_assistant_state.dart';
 import '../widgets/chat_bubble.dart';
 
-class ChatWithAiPage extends StatelessWidget {
-  ChatWithAiPage({super.key});
+class ChatWithAiPage extends StatefulWidget {
+  final String? token;
+  const ChatWithAiPage({super.key, this.token});
 
+  @override
+  State<ChatWithAiPage> createState() => _ChatWithAiPageState();
+}
+
+class _ChatWithAiPageState extends State<ChatWithAiPage> {
+  static const platform = MethodChannel('com.example.bank_query/token');
+  String? _currentToken;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _currentToken = widget.token;
+    _fetchLatestToken();
+  }
+
+  Future<void> _fetchLatestToken() async {
+    try {
+      final String? token = await platform.invokeMethod('getToken');
+      if (token != null && mounted) {
+        setState(() {
+          _currentToken = token;
+        });
+        debugPrint("ChatWithAiPage fetched latest token: $_currentToken");
+      }
+    } catch (e) {
+      debugPrint("Error fetching token in ChatPage: $e");
+    }
+  }
 
   void _send(BuildContext context, String text) {
     if (text.trim().isEmpty) return;
@@ -24,11 +54,9 @@ class ChatWithAiPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[300],
-
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(50),
         child: AppBar(
-
           backgroundColor: Colors.white,
           elevation: 2,
           leading: const BackButton(color: Colors.black),
@@ -56,18 +84,8 @@ class ChatWithAiPage extends StatelessWidget {
               ),
             ],
           ),
-          // actions: [
-          //   Padding(
-          //     padding: const EdgeInsets.only(right: 12),
-          //     child: Image.asset(
-          //       "assets/images/santander.png",
-          //       height: 22,
-          //     ),
-          //   )
-          // ],
         ),
       ),
-
       body: BlocListener<AiAssistantBloc, AiAssistantState>(
         listener: (context, state) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -86,33 +104,33 @@ class ChatWithAiPage extends StatelessWidget {
 
             return Column(
               children: [
-              Expanded(
+                if (_currentToken != null)
+                  Container(
+                    width: double.infinity,
+                    color: Colors.yellow.shade100,
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                    child: Text(
+                      "Active Session: $_currentToken",
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                Expanded(
                   child: ListView.builder(
                     controller: _scroll,
                     padding: const EdgeInsets.all(16),
-
-                    /// ✅ +1 FOR GREETING MESSAGE
-                    itemCount:
-                        chat.messages.length +
-                        (chat.isThinking ? 1 : 0) +
-                        (chat.messages.isEmpty ? 1 : 0),
-
+                    itemCount: chat.messages.length + (chat.isThinking ? 1 : 0) + (chat.messages.isEmpty ? 1 : 0),
                     itemBuilder: (context, index) {
-                      /// ✅ SHOW GREETING FIRST
                       if (chat.messages.isEmpty && index == 0) {
                         return ChatBubble(
                           isSpeaking: false,
                           isUser: false,
-                          text:
-                              "Hi Sarah! I'm FinAI, you can ask me anything about your finances.",
+                          text: "Hi Sarah! I'm FinAI, you can ask me anything about your finances.",
                         );
                       }
 
-                      /// ✅ FIX INDEX SHIFT
-                      final msgIndex =
-                          chat.messages.isEmpty ? index - 1 : index;
+                      final msgIndex = chat.messages.isEmpty ? index - 1 : index;
 
-                      /// ✅ THINKING STATE
                       if (chat.isThinking && msgIndex == chat.messages.length) {
                         return const Padding(
                           padding: EdgeInsets.only(top: 8),
@@ -132,14 +150,10 @@ class ChatWithAiPage extends StatelessWidget {
 
                       final msg = chat.messages[msgIndex];
 
-                      return ChatBubble(
-                          isSpeaking: false,
-                          text: msg.text, isUser: msg.isUser);
+                      return ChatBubble(isSpeaking: false, text: msg.text, isUser: msg.isUser);
                     },
                   ),
                 ),
-
-                /// ✅ INPUT
                 _inputBar(context),
               ],
             );
@@ -148,8 +162,6 @@ class ChatWithAiPage extends StatelessWidget {
       ),
     );
   }
-
-  // ---------------- UI WIDGETS ----------------
 
   Widget _inputBar(BuildContext context) {
     return SafeArea(
@@ -168,7 +180,7 @@ class ChatWithAiPage extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (context) {
-                            return TalkWithAiPage();
+                            return const TalkWithAiPage();
                           },
                         ),
                       );
@@ -201,17 +213,6 @@ class ChatWithAiPage extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _actionChip(String text) {
-    return OutlinedButton(
-      onPressed: () {},
-      style: OutlinedButton.styleFrom(
-        shape: StadiumBorder(),
-        side: const BorderSide(color: Colors.red),
-      ),
-      child: Text(text, style: const TextStyle(color: Colors.red)),
     );
   }
 }
