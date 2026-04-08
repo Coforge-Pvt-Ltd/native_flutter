@@ -1,24 +1,23 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../src/messages.g.dart';
 import '../../data/model/chat_message.dart';
 import '../../domain/usecases/ask_ai_question_usecase.dart';
 import 'ai_assistant_event.dart';
 import 'ai_assistant_state.dart';
 
-class AiAssistantBloc
-    extends Bloc<AiAssistantEvent, AiAssistantState> {
-
+class AiAssistantBloc extends Bloc<AiAssistantEvent, AiAssistantState> {
   final AskAiQuestionUseCase askAi;
-  static const _platform = MethodChannel('com.example.bank_query/token');
+  final _nativeApi = NativeApi();
 
   AiAssistantBloc(this.askAi)
-      : super(
-    AiChatState(
-      messages: [],
-      isThinking: false,
-      speakingMessageIndex: null,
-    ),
-  ) {
+    : super(
+        AiChatState(
+          messages: [],
+          isThinking: false,
+          speakingMessageIndex: null,
+        ),
+      ) {
     on<AskAi>(_onAskAi);
     on<AiStartedSpeaking>(_onAiStartedSpeaking);
     on<AiStoppedSpeaking>(_onAiStoppedSpeaking);
@@ -26,13 +25,10 @@ class AiAssistantBloc
 
   /// Helper to send logs to Native System Logs page
   void _logToNative(String message) {
-    _platform.invokeMethod('sendAppLog', {"message": message});
+    _nativeApi.sendAppLog(message);
   }
 
-  Future<void> _onAskAi(
-      AskAi event,
-      Emitter<AiAssistantState> emit,
-      ) async {
+  Future<void> _onAskAi(AskAi event, Emitter<AiAssistantState> emit) async {
     final current = state as AiChatState;
 
     _logToNative("User: ${event.question}");
@@ -51,7 +47,7 @@ class AiAssistantBloc
     try {
       // 2. Call AI UseCase
       final result = await askAi(event.question);
-      
+
       _logToNative("FinAI: ${result.text}");
 
       // 3. Add AI response and stop thinking
@@ -67,14 +63,17 @@ class AiAssistantBloc
       );
     } catch (e) {
       _logToNative("System Error: $e");
-      
+
       final updatedCurrent = state as AiChatState;
       emit(
         updatedCurrent.copyWith(
           isThinking: false,
           messages: [
             ...updatedCurrent.messages,
-            ChatMessage(text: "Sorry, I encountered an error. Please try again.", isUser: false),
+            ChatMessage(
+              text: "Sorry, I encountered an error. Please try again.",
+              isUser: false,
+            ),
           ],
         ),
       );
@@ -82,30 +81,22 @@ class AiAssistantBloc
   }
 
   void _onAiStartedSpeaking(
-      AiStartedSpeaking event,
-      Emitter<AiAssistantState> emit,
-      ) {
+    AiStartedSpeaking event,
+    Emitter<AiAssistantState> emit,
+  ) {
     if (state is AiChatState) {
       final current = state as AiChatState;
-      emit(
-        current.copyWith(
-          speakingMessageIndex: event.messageIndex,
-        ),
-      );
+      emit(current.copyWith(speakingMessageIndex: event.messageIndex));
     }
   }
 
   void _onAiStoppedSpeaking(
-      AiStoppedSpeaking event,
-      Emitter<AiAssistantState> emit,
-      ) {
+    AiStoppedSpeaking event,
+    Emitter<AiAssistantState> emit,
+  ) {
     if (state is AiChatState) {
       final current = state as AiChatState;
-      emit(
-        current.copyWith(
-          speakingMessageIndex: null,
-        ),
-      );
+      emit(current.copyWith(speakingMessageIndex: null));
     }
   }
 }

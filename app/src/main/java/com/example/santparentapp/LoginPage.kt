@@ -33,7 +33,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngineCache
-import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -74,11 +73,12 @@ fun LoginPage(modifier: Modifier = Modifier) {
                     scope.launch {
                         isLoading = true
                         LogManager.addLog("Login button clicked. Starting UUID generation...")
-                        delay(1000L)
-                        isLoading = false
-                        launchFlutterWithToken(context)
+                        // Delay is necessary to let Compose render the loader
+                        delay(1000L) 
+                        launchFlutterWithToken(context, onComplete = { 
+                            isLoading = false 
+                        })
                     }
-
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -113,27 +113,24 @@ fun LoginPage(modifier: Modifier = Modifier) {
     }
 }
 
-fun launchFlutterWithToken(context: Context) {
+fun launchFlutterWithToken(context: Context, onComplete: () -> Unit) {
     val randomUUID = java.util.UUID.randomUUID().toString()
     LogManager.addLog("Generated Token: $randomUUID")
-    
+
     // 1. Update the companion object variable in MyApp
     MyApp.flutterToken = randomUUID
     LogManager.addLog("Updated MyApp.flutterToken")
-    
-    // 2. Push the new token to the Flutter engine via MethodChannel
+
+    // 2. Push the new token to the Flutter engine via Pigeon
     val engine = FlutterEngineCache.getInstance().get("my_engine_id")
     if (engine != null) {
-        LogManager.addLog("Cached Flutter Engine found. Pushing token...")
-        val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "com.example.bank_query/token")
-        channel.invokeMethod("onTokenReceived", mapOf(
-            "token" to randomUUID,
-            "route" to "/chat"
-        ))
+        LogManager.addLog("Cached Flutter Engine found. Pushing token via Pigeon...")
+        val flutterApi = FlutterTokenApi(engine.dartExecutor.binaryMessenger)
+        flutterApi.onTokenReceived(TokenPayload(token = randomUUID, route = "/chat")) {}
     } else {
         LogManager.addLog("WARNING: Cached Flutter Engine NOT FOUND!")
     }
-            
+
     // 3. Launch the activity
     LogManager.addLog("Launching FlutterActivity...")
     context.startActivity(
@@ -141,6 +138,9 @@ fun launchFlutterWithToken(context: Context) {
             .withCachedEngine("my_engine_id")
             .build(context)
     )
+    
+    // Callback to stop loading
+    onComplete()
 }
 
 @Preview(showBackground = true, showSystemUi = true)
